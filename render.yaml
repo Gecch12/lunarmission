@@ -11,3 +11,4 @@ services:
         value: 22.16.0
       - key: NODE_ENV
         value: production
+plan: free
