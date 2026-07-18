@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#050912" />
+    <meta name="description" content="PERILUNE cooperative lunar mission game" />
+    <title>PERILUNE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <canvas id="renderCanvas" aria-label="Spacecraft cabin view"></canvas>
+
+    <main id="app">
+      <section id="connect-screen" class="glass connect-card">
+        <div class="eyebrow">COOPERATIVE LUNAR MISSION</div>
+        <h1>PERILUNE</h1>
+        <p class="lede">Get your crew around the Moon and back alive.</p>
+
+        <label>
+          Call sign
+          <input id="player-name" maxlength="18" autocomplete="nickname" placeholder="Gabriel" />
+        </label>
+
+        <div class="join-grid">
+          <button id="create-button" class="primary">Create mission</button>
+          <div class="join-row">
+            <input id="room-code" maxlength="6" autocapitalize="characters" placeholder="ROOM CODE" />
+            <button id="join-button">Join</button>
+          </div>
+        </div>
+
+        <p id="connection-status" class="status-line" role="status"></p>
+        <p class="fine-print">No account or installation. Use headphones and a separate voice call.</p>
+      </section>
+
+      <section id="game-screen" class="hidden game-layout">
+        <header class="glass topbar">
+          <div>
+            <div class="eyebrow">MISSION <span id="room-display">------</span></div>
+            <h2 id="phase-title">Crew assembly</h2>
+          </div>
+          <div class="mission-clock">
+            <span id="mission-time">00:00</span>
+            <small>MISSION ELAPSED</small>
+          </div>
+        </header>
+
+        <aside class="glass crew-panel">
+          <div class="panel-heading">
+            <h3>Crew</h3>
+            <span id="crew-count">0 / 6</span>
+          </div>
+          <div id="crew-list" class="crew-list"></div>
+
+          <div id="role-controls" class="role-controls">
+            <label>
+              Station
+              <select id="role-select">
+                <option value="">Select role</option>
+                <option>Commander</option>
+                <option>Pilot</option>
+                <option>Navigator</option>
+                <option>Systems</option>
+                <option>Science</option>
+                <option>Medical</option>
+              </select>
+            </label>
+            <button id="ready-button">Ready</button>
+            <button id="start-button" class="primary hidden">Start mission</button>
+          </div>
+        </aside>
+
+        <section class="glass mission-panel">
+          <div class="alert-line">
+            <span id="alert-dot" class="alert-dot"></span>
+            <strong id="status-message">Waiting for crew.</strong>
+          </div>
+          <h3 id="objective-title">Select a station and ready up.</h3>
+          <p id="objective-copy"></p>
+
+          <div id="role-brief" class="role-brief">
+            <span>YOUR BRIEF</span>
+            <p id="role-clue">Choose a role to receive your mission information.</p>
+          </div>
+
+          <div id="actions" class="actions"></div>
+        </section>
+
+        <section class="glass systems-panel">
+          <h3>Spacecraft</h3>
+          <div class="gauges">
+            <div class="gauge-row">
+              <div><span>Oxygen</span><strong id="oxygen-value">100%</strong></div>
+              <div class="bar"><i id="oxygen-bar"></i></div>
+            </div>
+            <div class="gauge-row">
+              <div><span>Power</span><strong id="power-value">100%</strong></div>
+              <div class="bar"><i id="power-bar"></i></div>
+            </div>
+            <div class="gauge-row">
+              <div><span>Heat</span><strong id="heat-value">12%</strong></div>
+              <div class="bar inverse"><i id="heat-bar"></i></div>
+            </div>
+            <div class="gauge-row">
+              <div><span>Trajectory</span><strong id="trajectory-value">100%</strong></div>
+              <div class="bar"><i id="trajectory-bar"></i></div>
+            </div>
+          </div>
+          <p id="phase-timer" class="phase-timer">No active deadline</p>
+        </section>
+
+        <footer class="glass footer-panel">
+          <span id="network-state">CONNECTED</span>
+          <button id="copy-code-button" class="text-button">Copy invite link</button>
+          <button id="leave-button" class="text-button">Leave mission</button>
+        </footer>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status"></div>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="/scene.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
