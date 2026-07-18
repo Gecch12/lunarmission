@@ -3,7 +3,7 @@ services:
     name: perilune
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --package-lock=false
     startCommand: npm start
     healthCheckPath: /health
     autoDeployTrigger: commit
