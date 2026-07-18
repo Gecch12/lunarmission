@@ -670,44 +670,65 @@
 
   function launchMarkup() {
     const nodes = [
-      ["align_computer", "▣", "Computer"],
-      ["start_scrubbers", "◉", "Scrubbers"],
-      ["seal_cabin", "⬡", "Cabin"],
-      ["arm_guidance", "⌁", "Guidance"],
-      ["authorize_launch", "▲", "Launch"],
+      ["align_computer", "01", "FLIGHT COMPUTER"],
+      ["start_scrubbers", "02", "SCRUBBERS"],
+      ["seal_cabin", "03", "CABIN SEAL"],
+      ["arm_guidance", "04", "GUIDANCE"],
+      ["authorize_launch", "05", "LAUNCH AUTH"],
     ];
-    return `<div class="launch-visual"><div class="launch-stack">${nodes.map(([action, icon, label]) => `
-      <div class="launch-node" data-visual-action="${action}"><span class="icon">${icon}</span><b>${label}</b><small>STANDBY</small></div>`).join("")}</div></div>`;
+    return `<div class="launch-cinematic">
+      <div class="launch-horizon"></div>
+      <div class="launch-pad"><i></i><i></i><i></i><i></i></div>
+      <div class="rocket-stack" aria-hidden="true">
+        <div class="rocket-nose"></div><div class="rocket-body"><span>LUNAR<br>MISSION</span></div>
+        <div class="rocket-booster left"></div><div class="rocket-booster right"></div>
+        <div class="rocket-flame"></div><div class="rocket-smoke"></div>
+      </div>
+      <div class="launch-countdown"><small>LAUNCH WINDOW</small><strong>T− <span id="launch-visual-countdown">150</span></strong><b>KENNEDY SPACE CENTER · PAD 39</b></div>
+      <div class="launch-console">${nodes.map(([action, number, label]) => `
+        <div class="launch-node" data-visual-action="${action}"><em>${number}</em><span class="switch"><i></i></span><b>${label}</b><small>STANDBY</small></div>`).join("")}</div>
+    </div>`;
   }
 
   function powerMarkup() {
-    return `<div class="power-visual">
-      <div class="power-core critical"><div><strong id="power-core-total">0</strong><small>UNITS ROUTED</small></div></div>
-      <div class="power-lanes">
-        ${["life", "cooling", "navigation", "science"].map((key) => `<div class="power-lane ${key}"><span>${key === "life" ? "Life support" : key}</span><div class="power-wire"><i id="lane-${key}"></i></div><strong id="lane-${key}-value">0</strong></div>`).join("")}
+    return `<div class="power-cinematic">
+      <div class="reactor-wall"><span class="warning-stripe"></span><span class="warning-stripe second"></span></div>
+      <div class="power-core critical"><div class="core-rings"><i></i><i></i><i></i></div><div><small>BUS B OUTPUT</small><strong id="power-core-total">0</strong><b>UNITS ROUTED</b></div></div>
+      <svg class="power-cables" viewBox="0 0 1000 430" preserveAspectRatio="none" aria-hidden="true">
+        <path class="cable life" d="M500,205 C420,205 400,80 250,80"/><path class="cable cooling" d="M500,205 C420,205 400,350 250,350"/>
+        <path class="cable navigation" d="M500,205 C580,205 600,80 750,80"/><path class="cable science" d="M500,205 C580,205 600,350 750,350"/>
+      </svg>
+      <div class="power-lanes visual-power-lanes">
+        ${["life", "cooling", "navigation", "science"].map((key, index) => `<div class="power-lane ${key}" style="--node-index:${index}"><span>${key === "life" ? "LIFE SUPPORT" : key.toUpperCase()}</span><div class="power-wire"><i id="lane-${key}"></i></div><strong id="lane-${key}-value">0</strong><small>POWER UNITS</small></div>`).join("")}
       </div>
+      <div class="power-alert"><span>⚠</span><div><b>THERMAL RUNAWAY</b><small>Route the exact available load before the bus trips.</small></div></div>
     </div>`;
   }
 
   function navigationMarkup() {
-    return `<div class="nav-visual">
-      <div class="nav-map"><div class="orbit-stars"></div><div class="orbit-earth"></div><div class="orbit-moon"></div><div class="nav-path preview"></div><div class="nav-target"></div><div class="nav-ship">◆</div></div>
-      <div class="nav-readout">
-        <div><span>COMMAND</span><strong id="nav-direction">UNSET</strong></div>
-        <div><span>DURATION</span><strong id="nav-duration">—</strong></div>
-        <div><span>PROJECTED PATH</span><strong id="nav-confidence">AWAITING DATA</strong></div>
+    return `<div class="navigation-cinematic">
+      <div class="nav-map"><div class="orbit-stars"></div><div class="orbit-earth detailed"></div><div class="orbit-moon detailed"></div>
+        <div class="nav-safe-corridor"></div><div class="nav-path current"></div><div class="nav-path preview"></div><div class="nav-target"><i></i></div>
+        <div class="nav-ship"><span>◆</span><i></i></div><span class="map-label earth">EARTH</span><span class="map-label moon">MOON</span>
       </div>
+      <div class="nav-readout cinematic-readout">
+        <div><span>BURN VECTOR</span><strong id="nav-direction">UNSET</strong></div>
+        <div><span>ENGINE TIME</span><strong id="nav-duration">—</strong></div>
+        <div><span>PROJECTED RETURN</span><strong id="nav-confidence">AWAITING DATA</strong></div>
+      </div>
+      <div class="trajectory-legend"><span class="red">CURRENT PATH</span><span class="cyan">COMMAND PREVIEW</span><span class="green">SAFE CORRIDOR</span></div>
     </div>`;
   }
 
   function reentryMarkup() {
-    return `<div class="reentry-visual">
-      <div class="reentry-sky"><div class="plasma-band"></div><div class="reentry-capsule">⬟</div></div>
-      <div class="reentry-readout">
-        <div class="telemetry-pill"><span>Entry command</span><strong id="entry-command">UNLOCKED</strong></div>
-        <div class="telemetry-pill"><span>Velocity</span><strong id="reentry-speed">—</strong></div>
-        <div class="telemetry-pill"><span>Altitude</span><strong id="reentry-altitude">—</strong></div>
-        <div class="telemetry-pill hot"><span>Heat</span><strong id="reentry-heat">—</strong></div>
+    return `<div class="reentry-cinematic">
+      <div class="reentry-sky"><div class="earth-curve"></div><div class="plasma-trail one"></div><div class="plasma-trail two"></div><div class="plasma-trail three"></div><div class="plasma-band"></div><div class="reentry-capsule"><span></span><i></i></div></div>
+      <div class="entry-corridor"><span>−9°</span><i class="corridor-safe"></i><b class="entry-marker"></b><span>−4°</span></div>
+      <div class="reentry-readout cinematic-readout">
+        <div><span>ENTRY COMMAND</span><strong id="entry-command">UNLOCKED</strong></div>
+        <div><span>VELOCITY</span><strong id="reentry-speed">—</strong></div>
+        <div><span>ALTITUDE</span><strong id="reentry-altitude">—</strong></div>
+        <div class="hot"><span>HEAT SHIELD</span><strong id="reentry-heat">—</strong></div>
       </div>
     </div>`;
   }
@@ -796,6 +817,8 @@
     } else if (state.phase === "launch") {
       visualTitle.textContent = "Launch interlock sequence";
       visualTelemetry.textContent = `${done.size} / 5 SYSTEMS CONFIRMED\nT-${Math.max(0, state.phaseDeadline - state.phaseSeconds)}s`;
+      const launchCountdown = document.querySelector("#launch-visual-countdown");
+      if (launchCountdown) launchCountdown.textContent = String(Math.max(0, state.phaseDeadline - state.phaseSeconds)).padStart(3, "0");
       for (const node of document.querySelectorAll("[data-visual-action]")) {
         const action = node.dataset.visualAction;
         const completed = done.has(action);
@@ -803,6 +826,7 @@
         const small = node.querySelector("small");
         if (small) small.textContent = completed ? "CONFIRMED" : "STANDBY";
       }
+      document.querySelector(".rocket-stack")?.classList.toggle("armed", done.has("authorize_launch"));
     } else if (state.phase === "power") {
       visualTitle.textContent = "Emergency bus routing";
       visualTelemetry.textContent = `BUS B THERMAL RUNAWAY\nHEAT ${Math.round(state.heat)}%`;

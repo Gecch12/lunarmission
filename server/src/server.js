@@ -146,7 +146,7 @@ function serveStatic(request, response) {
   const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
   if (url.pathname === "/health") {
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    response.end(JSON.stringify({ status: "ok", game: "Lunar Mission", version: "0.3.0", rooms: rooms.size }));
+    response.end(JSON.stringify({ status: "ok", game: "Lunar Mission", version: "0.4.0", rooms: rooms.size }));
     return;
   }
 

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: perilune
+    name: lunarmission
     runtime: node
     plan: free
     buildCommand: npm install --package-lock=false

@@ -1,10 +1,10 @@
-# LUNAR MISSION — v0.3
+# LUNAR MISSION — v0.4
 
 **LUNAR MISSION** is a private browser game for **1–6 players**. The crew combines incomplete role-specific clues to solve a launch logic procedure, allocate emergency power, calculate a correction burn, and survive re-entry.
 
-Version 0.3 keeps the harder v0.2 puzzles and rebuilds the browser presentation around a live mission display rather than a page of forms.
+Version 0.4 keeps the harder v0.2 puzzles and rebuilds the browser presentation around a full-screen cinematic mission view rather than a page of forms.
 
-## What changed in v0.3
+## What changed in v0.4
 
 - Animated Earth–Moon mission display with phase-specific visuals
 - Visual launch interlocks, emergency power circuits, orbit preview, and re-entry descent
@@ -37,7 +37,7 @@ Expected first-run duration is approximately **12–20 minutes**, depending on c
 6. Render will automatically deploy the new commit.
 7. When Render shows **Live**, refresh the game with `Ctrl + Shift + R`.
 
-The Render service remains internally named `perilune` so the existing URL continues working. The website itself is branded **LUNAR MISSION**.
+The Render service and website are named **LUNAR MISSION**.
 
 ## Project structure
 
