@@ -1,9 +1,9 @@
 {
-  "name": "perilune-mvp",
+  "name": "lunar-mission-mvp",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Private browser-based cooperative lunar mission game for 1-6 players.",
+  "description": "Private browser-based cooperative lunar deduction game for 1-6 players.",
   "scripts": {
     "dev": "node --watch server/src/server.js",
     "start": "node server/src/server.js",

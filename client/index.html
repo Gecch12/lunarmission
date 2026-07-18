@@ -4,21 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#050912" />
-    <meta name="description" content="PERILUNE cooperative lunar mission game" />
-    <title>PERILUNE</title>
+    <meta name="description" content="Lunar Mission cooperative science-based lunar mission game" />
+    <title>LUNAR MISSION</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <canvas id="renderCanvas" aria-label="Spacecraft cabin view"></canvas>
+    <canvas id="renderCanvas" aria-label="Lunar spacecraft cabin view"></canvas>
 
     <main id="app">
       <section id="connect-screen" class="glass connect-card">
-        <div class="eyebrow">COOPERATIVE LUNAR MISSION</div>
-        <h1>PERILUNE</h1>
-        <p class="lede">Get your crew around the Moon and back alive.</p>
+        <div class="eyebrow">COOPERATIVE SCIENCE MISSION</div>
+        <h1>LUNAR<br />MISSION</h1>
+        <p class="lede">Combine incomplete clues, make the calculations, and bring your crew home.</p>
 
         <label>
           Call sign
@@ -34,13 +34,13 @@
         </div>
 
         <p id="connection-status" class="status-line" role="status"></p>
-        <p class="fine-print">No account or installation. Use headphones and a separate voice call.</p>
+        <p class="fine-print">No account or installation. Multiplayer divides the clues; solo training reveals all six station briefs.</p>
       </section>
 
       <section id="game-screen" class="hidden game-layout">
         <header class="glass topbar">
           <div>
-            <div class="eyebrow">MISSION <span id="room-display">------</span></div>
+            <div class="eyebrow">LUNAR MISSION · ROOM <span id="room-display">------</span></div>
             <h2 id="phase-title">Crew assembly</h2>
           </div>
           <div class="mission-clock">
@@ -83,7 +83,7 @@
           <p id="objective-copy"></p>
 
           <div id="role-brief" class="role-brief">
-            <span>YOUR BRIEF</span>
+            <span>YOUR ASSIGNED BRIEF(S)</span>
             <p id="role-clue">Choose a role to receive your mission information.</p>
           </div>
 
@@ -106,8 +106,12 @@
               <div class="bar inverse"><i id="heat-bar"></i></div>
             </div>
             <div class="gauge-row">
-              <div><span>Trajectory</span><strong id="trajectory-value">100%</strong></div>
+              <div><span>Trajectory</span><strong id="trajectory-value">82%</strong></div>
               <div class="bar"><i id="trajectory-bar"></i></div>
+            </div>
+            <div class="gauge-row">
+              <div><span>Mission data</span><strong id="data-value">10%</strong></div>
+              <div class="bar data-bar"><i id="data-bar"></i></div>
             </div>
           </div>
           <p id="phase-timer" class="phase-timer">No active deadline</p>

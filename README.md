@@ -1,97 +1,59 @@
-# PERILUNE MVP
+# LUNAR MISSION MVP — v0.2
 
-**PERILUNE** is a private browser game for **1–6 players**. A cooperative crew operates a fictional lunar spacecraft, solves science-based emergencies, performs a lunar flyby, survives re-entry, and splashes down.
+**LUNAR MISSION** is a private browser game for **1–6 players**. The crew combines incomplete role-specific clues to solve a launch logic procedure, allocate emergency power, calculate a correction burn, and determine a safe re-entry and parachute window.
 
-This repository is a working vertical slice designed to be easy to test and ship. It uses one Node.js service for both the website and real-time multiplayer, so there is only one link to share.
+This version replaces the original guided checklist with actual deduction, calculation, and trade-offs.
 
-## Included
+## What changed in v0.2
 
-- Private six-character room codes
-- 1–6 online players
-- Six unique crew roles
-- Solo play
-- Responsive laptop and phone interface
-- Lightweight 3D first-person spacecraft cabin using Babylon.js
-- Server-authoritative mission state, sequencing, puzzle answers, resources, and victory
-- Four mission phases
-- Reconnection window of 45 seconds
-- No accounts, database, installation, analytics, or paid assets
+- Public game name changed to **LUNAR MISSION**
+- Clues now come from the server and are private to each player
+- Unfilled roles are cross-assigned, so 1–6 players can always solve the mission
+- Solo training displays all six station briefs
+- Randomized mission variants reduce memorization
+- Five-action launch logic puzzle
+- Emergency allocation puzzle with safety minimums and a science-versus-margin trade-off
+- Navigation requires direction, drift adjustment, engine efficiency, and a rounded burn duration
+- Re-entry requires intersecting angle constraints and calculating a one-attempt parachute window
+- Mission Data gauge and final ratings: Survival Return, Nominal Return, or Scientific Triumph
 
 ## Mission flow
 
-1. Complete launch checks in the correct order.
-2. Survive an overheating power bus.
-3. Calculate and program the lunar correction burn.
-4. Set the re-entry angle and deploy parachutes in the safe corridor.
+1. **Launch logic:** Deduce the only valid order from distributed constraints.
+2. **Power allocation:** Use the exact available total, satisfy safety minimums, and choose how much to preserve for science.
+3. **Correction burn:** Combine Δv, drift, direction, acceleration, and efficiency.
+4. **Re-entry:** Calculate the safe angle and the overlap between velocity-safe and altitude-safe parachute windows.
 
-A successful run is approximately **7–10 minutes**. The planned full game can later expand to 20–30 minutes.
+Expected first-run duration is approximately **12–20 minutes**, depending on crew size and discussion.
 
-## Run locally
+## Updating the live Render version without local installation
 
-Requirements: Node.js 22 and npm.
+1. Unzip the update package.
+2. Open the existing GitHub repository.
+3. Choose **Add file → Upload files**.
+4. Drag all files and folders from the unzipped update into the repository and allow GitHub to replace files with the same names.
+5. Commit the changes to `main`.
+6. Render will automatically deploy the new commit.
 
-```bash
-npm install
-npm start
-```
-
-Open:
-
-```text
-http://localhost:2567
-```
-
-Open several browser windows to test multiplayer. One player creates the mission and shares the room code or invite link.
-
-## Validate the source
-
-```bash
-npm run check
-```
-
-## Ship on Render
-
-1. Create an empty GitHub repository.
-2. Upload this project and push it to GitHub.
-3. In Render, choose **New → Blueprint**.
-4. Connect the GitHub repository.
-5. Render reads `render.yaml` and creates the `perilune` web service.
-6. When deployment finishes, open the Render URL and create a mission.
-
-Every GitHub push automatically redeploys the game. The client and WebSocket server use the same public URL, so no environment-variable wiring is required.
-
-### Free-tier note
-
-A free Render service can sleep after inactivity. Open the game link shortly before the group session to wake it up.
-
-## Basic security model
-
-- Rooms are unlisted and addressed by a random code.
-- New players cannot join after launch.
-- All puzzle validation and resource changes happen on the server.
-- Incoming message size and message frequency are limited.
-- This is suitable for a private friends-only prototype, not competitive public matchmaking.
+The Render service remains internally named `perilune` so the existing URL continues working. Players will see **LUNAR MISSION** everywhere in the game.
 
 ## Project structure
 
 ```text
 client/
-  index.html       Browser interface
+  index.html       Browser interface and Lunar Mission branding
   styles.css       Responsive visual design
   scene.js         Procedural Babylon.js spacecraft cabin
-  app.js           Multiplayer client and game UI
+  app.js           Multiplayer client, private briefs, and puzzle controls
 server/src/
-  server.js        HTTP hosting, WebSockets, rooms, game rules
-render.yaml        One-click Render configuration
+  server.js        Hosting, WebSockets, private clues, randomized scenarios, and game rules
+render.yaml        Existing free Render deployment configuration
 ```
 
-## Recommended next iteration
+## Security model
 
-Play once with four friends and record where people become confused. Then prioritize:
-
-1. Better onboarding and role instructions
-2. Original sound effects and music
-3. Role-private information enforced by the server
-4. Branching science and philosophy events
-5. A 20–30 minute complete lunar mission
-6. Accessibility settings and broader mobile testing
+- Rooms are unlisted and use random six-character codes.
+- New players cannot join after launch.
+- Private clues, answers, resource changes, and mission results are validated on the server.
+- Incoming message size and frequency are limited.
+- This remains a private friends-only prototype, not public competitive matchmaking.

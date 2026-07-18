@@ -9,7 +9,7 @@
     return material;
   }
 
-  window.createPeriluneScene = function createPeriluneScene(canvas) {
+  window.createLunarMissionScene = function createLunarMissionScene(canvas) {
     if (!window.BABYLON) {
       return { setAlert() {}, setPhase() {} };
     }

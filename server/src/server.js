@@ -1,16 +1,17 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { dirname, extname, join, normalize, resolve } from "node:path";
+import { dirname, extname, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "../..");
-const CLIENT_ROOT = join(ROOT, "client");
+const CLIENT_ROOT = resolve(ROOT, "client");
 const PORT = Number.parseInt(process.env.PORT || "2567", 10);
 const ROOM_CODE_CHARACTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const ROLES = new Set(["Commander", "Pilot", "Navigator", "Systems", "Science", "Medical"]);
+const ROLE_LIST = ["Commander", "Pilot", "Navigator", "Systems", "Science", "Medical"];
+const ROLES = new Set(ROLE_LIST);
 const rooms = new Map();
 
 const MIME_TYPES = {
@@ -24,6 +25,110 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
 };
+
+const LAUNCH_VARIANTS = [
+  {
+    order: ["align_computer", "start_scrubbers", "seal_cabin", "arm_guidance", "authorize_launch"],
+    clues: {
+      Commander: "Launch authorization is the final action. Nothing may follow it.",
+      Pilot: "Guidance may be armed only after the cabin is sealed.",
+      Navigator: "The flight computer must be aligned before the scrubbers start.",
+      Systems: "The scrubbers must be running immediately before the cabin is sealed.",
+      Science: "Computer alignment must occur before any environmental system is activated.",
+      Medical: "Cabin sealing must happen immediately after the scrubbers start.",
+    },
+  },
+  {
+    order: ["start_scrubbers", "align_computer", "arm_guidance", "seal_cabin", "authorize_launch"],
+    clues: {
+      Commander: "Launch authorization is the final action.",
+      Pilot: "Arm guidance immediately after the flight computer is aligned.",
+      Navigator: "Guidance must be armed before the cabin is sealed.",
+      Systems: "The cabin cannot be sealed until guidance is armed.",
+      Science: "The computer must be aligned after the scrubbers start, not before.",
+      Medical: "Start the scrubbers before any avionics action.",
+    },
+  },
+  {
+    order: ["align_computer", "arm_guidance", "start_scrubbers", "seal_cabin", "authorize_launch"],
+    clues: {
+      Commander: "Launch authorization is the final action.",
+      Pilot: "Arm guidance immediately after computer alignment.",
+      Navigator: "Guidance must be armed before the scrubbers start.",
+      Systems: "The cabin is sealed after the scrubbers are running.",
+      Science: "Computer alignment is the first action in the procedure.",
+      Medical: "Start the scrubbers immediately before sealing the cabin.",
+    },
+  },
+];
+
+const POWER_VARIANTS = [
+  { available: 86, lifeBase: 18, lifePerCrew: 2, coolingMin: 30, navigationMin: 16 },
+  { available: 84, lifeBase: 20, lifePerCrew: 1, coolingMin: 28, navigationMin: 18 },
+  { available: 88, lifeBase: 18, lifePerCrew: 1, coolingMin: 32, navigationMin: 16 },
+];
+
+const NAVIGATION_VARIANTS = [
+  { targetDv: 124, drift: 8, driftMode: "assists", acceleration: 2.5, efficiency: 0.8, direction: "prograde" },
+  { targetDv: 132, drift: 12, driftMode: "assists", acceleration: 2.4, efficiency: 0.8, direction: "retrograde" },
+  { targetDv: 108, drift: 6, driftMode: "opposes", acceleration: 2.5, efficiency: 0.8, direction: "prograde" },
+  { targetDv: 140, drift: 10, driftMode: "assists", acceleration: 2.6, efficiency: 1.0, direction: "retrograde" },
+];
+
+const REENTRY_VARIANTS = [
+  {
+    nominalMin: 5.8,
+    nominalMax: 7.2,
+    weatherShift: 0.2,
+    heatShieldMax: 6.8,
+    medicalMin: 6.2,
+    speedStart: 600,
+    speedDrop: 18,
+    chuteMaxSpeed: 258,
+    altitudeStart: 15.5,
+    altitudeDrop: 0.42,
+    minimumAltitude: 5.0,
+  },
+  {
+    nominalMin: 5.7,
+    nominalMax: 7.1,
+    weatherShift: -0.2,
+    heatShieldMax: 6.6,
+    medicalMin: 5.9,
+    speedStart: 620,
+    speedDrop: 20,
+    chuteMaxSpeed: 260,
+    altitudeStart: 16.0,
+    altitudeDrop: 0.45,
+    minimumAltitude: 5.5,
+  },
+  {
+    nominalMin: 5.9,
+    nominalMax: 7.3,
+    weatherShift: 0.1,
+    heatShieldMax: 6.9,
+    medicalMin: 6.1,
+    speedStart: 580,
+    speedDrop: 16,
+    chuteMaxSpeed: 260,
+    altitudeStart: 14.8,
+    altitudeDrop: 0.4,
+    minimumAltitude: 5.6,
+  },
+  {
+    nominalMin: 5.6,
+    nominalMax: 7.0,
+    weatherShift: 0.3,
+    heatShieldMax: 6.7,
+    medicalMin: 6.0,
+    speedStart: 640,
+    speedDrop: 22,
+    chuteMaxSpeed: 266,
+    altitudeStart: 16.2,
+    altitudeDrop: 0.48,
+    minimumAltitude: 5.7,
+  },
+];
 
 function setSecurityHeaders(response) {
   response.setHeader("X-Content-Type-Options", "nosniff");
@@ -41,7 +146,7 @@ function serveStatic(request, response) {
   const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
   if (url.pathname === "/health") {
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    response.end(JSON.stringify({ status: "ok", rooms: rooms.size }));
+    response.end(JSON.stringify({ status: "ok", game: "Lunar Mission", rooms: rooms.size }));
     return;
   }
 
@@ -65,6 +170,38 @@ function serveStatic(request, response) {
 
 function randomId(bytes = 12) {
   return randomBytes(bytes).toString("base64url");
+}
+
+function choose(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function roundOne(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function createMissionScenario() {
+  const navigation = { ...choose(NAVIGATION_VARIANTS) };
+  const adjustedDv = navigation.driftMode === "assists"
+    ? navigation.targetDv - navigation.drift
+    : navigation.targetDv + navigation.drift;
+  navigation.answerSeconds = Math.round(adjustedDv / (navigation.acceleration * navigation.efficiency));
+
+  const reentry = { ...choose(REENTRY_VARIANTS) };
+  const shiftedMin = reentry.nominalMin + reentry.weatherShift;
+  const shiftedMax = reentry.nominalMax + reentry.weatherShift;
+  const finalMin = Math.max(shiftedMin, reentry.medicalMin);
+  const finalMax = Math.min(shiftedMax, reentry.heatShieldMax);
+  reentry.answerAngle = roundOne((finalMin + finalMax) / 2);
+  reentry.earliestChute = Math.ceil((reentry.speedStart - reentry.chuteMaxSpeed) / reentry.speedDrop);
+  reentry.latestChute = Math.floor((reentry.altitudeStart - reentry.minimumAltitude) / reentry.altitudeDrop);
+
+  return {
+    launch: choose(LAUNCH_VARIANTS),
+    power: { ...choose(POWER_VARIANTS) },
+    navigation,
+    reentry,
+  };
 }
 
 function createRoomCode() {
@@ -94,16 +231,20 @@ class MissionRoom {
     this.code = code;
     this.players = new Map();
     this.hostSessionId = "";
+    this.scenario = createMissionScenario();
     this.phase = "lobby";
     this.phaseIndex = 0;
     this.missionSeconds = 0;
     this.phaseSeconds = 0;
     this.phaseDeadline = 0;
+    this.angleLockedAt = null;
     this.oxygen = 100;
     this.power = 100;
     this.heat = 12;
-    this.trajectory = 100;
+    this.trajectory = 82;
+    this.missionData = 10;
     this.objective = "Select a station and ready up.";
+    this.objectiveDetail = "In multiplayer, missing station briefs are cross-assigned so every clue remains available.";
     this.statusMessage = "Waiting for crew.";
     this.alertLevel = "normal";
     this.completedActions = [];
@@ -111,7 +252,7 @@ class MissionRoom {
     this.tickTimer = setInterval(() => this.tick(), 1000);
   }
 
-  publicState() {
+  sharedState() {
     const players = {};
     for (const [id, player] of this.players) {
       players[id] = {
@@ -123,6 +264,7 @@ class MissionRoom {
     }
 
     return {
+      gameName: "Lunar Mission",
       roomCode: this.code,
       players,
       hostSessionId: this.hostSessionId,
@@ -131,15 +273,111 @@ class MissionRoom {
       missionSeconds: this.missionSeconds,
       phaseSeconds: this.phaseSeconds,
       phaseDeadline: this.phaseDeadline,
+      descentSeconds: this.angleLockedAt === null ? null : Math.max(0, this.phaseSeconds - this.angleLockedAt),
       oxygen: this.oxygen,
       power: this.power,
       heat: this.heat,
       trajectory: this.trajectory,
+      missionData: this.missionData,
       objective: this.objective,
+      objectiveDetail: this.objectiveDetail,
       statusMessage: this.statusMessage,
       alertLevel: this.alertLevel,
       completedActions: this.completedActions.join(","),
     };
+  }
+
+  stateFor(player) {
+    return {
+      ...this.sharedState(),
+      privateBrief: this.privateBriefFor(player),
+      assignedBriefRoles: this.assignedBriefRoles(player),
+    };
+  }
+
+  assignedBriefRoles(player) {
+    if (!player || this.players.size === 0 || !player.role) return [];
+    const activePlayers = [...this.players.values()];
+    const owners = new Map();
+
+    for (const crewMember of activePlayers) {
+      if (crewMember.role) owners.set(crewMember.role, crewMember);
+    }
+
+    let cursor = 0;
+    for (const role of ROLE_LIST) {
+      if (!owners.has(role)) {
+        owners.set(role, activePlayers[cursor % activePlayers.length]);
+        cursor += 1;
+      }
+    }
+
+    return ROLE_LIST.filter((role) => owners.get(role)?.sessionId === player.sessionId);
+  }
+
+  privateBriefFor(player) {
+    if (!player?.role) return "Choose a station to receive your mission information.";
+    if (this.phase === "lobby") {
+      const extra = this.players.size === 1
+        ? "Solo training will show all six station briefs after launch."
+        : "Unfilled stations will be cross-assigned when the mission launches.";
+      return `${player.role} station selected. ${extra}`;
+    }
+    if (this.phase === "won") return "Recovery forces have acquired the capsule beacon. Compare your remaining margins and mission data.";
+    if (this.phase === "lost") return "Debrief the failed assumption. On the next attempt, report every number and constraint before anyone acts.";
+
+    const assignedRoles = this.assignedBriefRoles(player);
+    return assignedRoles
+      .map((role) => `[${role.toUpperCase()}]\n${this.briefForRole(this.phase, role)}`)
+      .join("\n\n");
+  }
+
+  briefForRole(phase, role) {
+    if (phase === "launch") return this.scenario.launch.clues[role];
+
+    if (phase === "power") {
+      const p = this.scenario.power;
+      const crewCount = this.players.size;
+      const clues = {
+        Commander: `The allocation bus has exactly ${p.available} units. Submit four whole-number allocations that total exactly ${p.available}; no unit may remain unused.`,
+        Pilot: "A balanced allocation is safer than maximizing one system. Navigation surplus improves trajectory margin.",
+        Navigator: `Navigation requires at least ${p.navigationMin} units. Every unit above that minimum improves the return corridor.`,
+        Systems: `Cooling requires at least ${p.coolingMin} units to stop the thermal runaway. Extra cooling reduces heat.`,
+        Science: "Any units assigned to Science become mission data. Science may receive zero, but higher data improves the final mission rating.",
+        Medical: `Life-support minimum = ${p.lifeBase} + (${p.lifePerCrew} × number of crew). There are ${crewCount} crew member${crewCount === 1 ? "" : "s"} in this mission.`,
+      };
+      return clues[role];
+    }
+
+    if (phase === "navigation") {
+      const n = this.scenario.navigation;
+      const driftText = n.driftMode === "assists" ? "already assists the correction" : "opposes the required correction";
+      const clues = {
+        Commander: "Agree on burn direction and duration. Round the final duration to the nearest whole second.",
+        Pilot: `Main-engine rated acceleration is ${n.acceleration} m/s².`,
+        Navigator: `The required correction is ${n.targetDv} m/s ${n.direction.toUpperCase()}.`,
+        Systems: `Engine efficiency is ${(n.efficiency * 100).toFixed(0)}%. Multiply rated acceleration by efficiency before calculating time.`,
+        Science: `Existing drift is ${n.drift} m/s and ${driftText}. Adjust Δv first, then use time = adjusted Δv ÷ effective acceleration.`,
+        Medical: "One continuous burn is acceptable. Do not split the burn into separate maneuvers.",
+      };
+      return clues[role];
+    }
+
+    if (phase === "reentry") {
+      const r = this.scenario.reentry;
+      const shift = `${r.weatherShift >= 0 ? "+" : ""}${r.weatherShift.toFixed(1)}°`;
+      const clues = {
+        Commander: "For entry angle, use the midpoint of the final safe overlap and round to 0.1°. Locking the angle starts the descent clock at T+00.",
+        Pilot: `At T+00, speed is ${r.speedStart} m/s and falls by ${r.speedDrop} m/s each second.`,
+        Navigator: `Nominal entry corridor is ${r.nominalMin.toFixed(1)}°–${r.nominalMax.toFixed(1)}°. At T+00 altitude is ${r.altitudeStart.toFixed(1)} km and falls by ${r.altitudeDrop.toFixed(2)} km each second.`,
+        Systems: `Heat-shield damage limits entry angle to no more than ${r.heatShieldMax.toFixed(1)}°. Parachutes tolerate at most ${r.chuteMaxSpeed} m/s.`,
+        Science: `Weather shifts both edges of the nominal corridor by ${shift}. Apply the shift before intersecting all limits.`,
+        Medical: `Crew g-load requires an angle of at least ${r.medicalMin.toFixed(1)}°. Parachutes must deploy while altitude remains above ${r.minimumAltitude.toFixed(1)} km.`,
+      };
+      return clues[role];
+    }
+
+    return "Stand by for mission instructions.";
   }
 
   addPlayer(socket, name) {
@@ -294,16 +532,20 @@ class MissionRoom {
     if (!["won", "lost"].includes(this.phase)) return;
     if (player.sessionId !== this.hostSessionId) return this.error(player, "Only the host can reset the mission.");
 
+    this.scenario = createMissionScenario();
     this.phase = "lobby";
     this.phaseIndex = 0;
     this.missionSeconds = 0;
     this.phaseSeconds = 0;
     this.phaseDeadline = 0;
+    this.angleLockedAt = null;
     this.oxygen = 100;
     this.power = 100;
     this.heat = 12;
-    this.trajectory = 100;
+    this.trajectory = 82;
+    this.missionData = 10;
     this.objective = "Select a station and ready up.";
+    this.objectiveDetail = "A new randomized mission profile has been generated.";
     this.statusMessage = "Waiting for crew.";
     this.alertLevel = "normal";
     this.completedActions = [];
@@ -316,73 +558,23 @@ class MissionRoom {
     if (!action) return this.error(player, "Invalid action.");
 
     if (this.phase === "launch") {
-      return this.handleSequenceAction(
-        player,
-        action,
-        ["arm_guidance", "seal_cabin", "authorize_launch"],
-        "power",
-      );
+      return this.handleSequenceAction(player, action, this.scenario.launch.order, "power");
     }
 
-    if (this.phase === "power") {
-      return this.handleSequenceAction(
-        player,
-        action,
-        ["isolate_payload", "reroute_cooling", "prioritize_life_support"],
-        "navigation",
-      );
+    if (this.phase === "power" && action === "submit_allocation") {
+      return this.handlePowerAllocation(player, message.allocations);
     }
 
     if (this.phase === "navigation" && action === "program_burn") {
-      const answer = Number(message.value);
-      if (answer === 39) {
-        this.addCompleted("burn_39");
-        this.statusMessage = "Correction burn complete. Free-return trajectory restored.";
-        this.trajectory = Math.min(100, this.trajectory + 25);
-        this.broadcastState();
-        setTimeout(() => {
-          if (this.phase === "navigation") this.transition("reentry");
-        }, 1200);
-      } else {
-        this.trajectory = Math.max(0, this.trajectory - 15);
-        this.power = Math.max(0, this.power - 6);
-        this.error(player, "Incorrect burn. The failed maneuver consumed power and worsened the trajectory.");
-        this.broadcastState();
-      }
-      return;
+      return this.handleBurn(player, message);
     }
 
     if (this.phase === "reentry" && action === "set_entry_angle") {
-      const angle = Number(message.value);
-      if (Math.abs(angle - 6.5) < 0.051) {
-        this.addCompleted("entry_angle");
-        this.statusMessage = "Entry angle locked. Hold through peak heating.";
-      } else {
-        this.heat = Math.min(100, this.heat + 12);
-        this.trajectory = Math.max(0, this.trajectory - 12);
-        this.error(player, "Unsafe corridor. Target the centerline, not an edge.");
-      }
-      this.broadcastState();
-      return;
+      return this.handleEntryAngle(player, message.value);
     }
 
     if (this.phase === "reentry" && action === "deploy_parachutes") {
-      if (!this.hasCompleted("entry_angle")) return this.error(player, "Lock the entry angle first.");
-      if (this.phaseSeconds < 20) {
-        this.trajectory = Math.max(0, this.trajectory - 18);
-        this.error(player, "Too early. The parachutes were damaged by peak heating.");
-        this.broadcastState();
-        return;
-      }
-      if (this.phaseSeconds > 40) {
-        this.trajectory = Math.max(0, this.trajectory - 18);
-        this.error(player, "Too late. Descent velocity is now critical.");
-        this.broadcastState();
-        return;
-      }
-      this.addCompleted("parachutes");
-      this.finish(true, "Splashdown confirmed. Recovery forces are inbound.");
-      return;
+      return this.handleParachutes(player);
     }
 
     this.error(player, "That control is not valid in the current mission phase.");
@@ -394,9 +586,9 @@ class MissionRoom {
 
     const requiredAction = expected[this.completedActions.length];
     if (action !== requiredAction) {
-      this.power = Math.max(0, this.power - 5);
-      this.trajectory = Math.max(0, this.trajectory - 4);
-      this.error(player, "Incorrect sequence. Verify the crew briefs before continuing.");
+      this.power = Math.max(0, this.power - 4);
+      this.trajectory = Math.max(0, this.trajectory - 3);
+      this.error(player, "Sequence rejected. One or more crew constraints were violated.");
       this.broadcastState();
       return;
     }
@@ -413,35 +605,170 @@ class MissionRoom {
     }
   }
 
+  handlePowerAllocation(player, rawAllocations) {
+    if (this.hasCompleted("allocation")) return;
+    const keys = ["life", "cooling", "navigation", "science"];
+    const allocations = {};
+    for (const key of keys) {
+      const value = Number(rawAllocations?.[key]);
+      if (!Number.isInteger(value) || value < 0 || value > 100) {
+        return this.error(player, "Enter a non-negative whole number for every allocation.");
+      }
+      allocations[key] = value;
+    }
+
+    const p = this.scenario.power;
+    const lifeMinimum = p.lifeBase + p.lifePerCrew * this.players.size;
+    const total = keys.reduce((sum, key) => sum + allocations[key], 0);
+    const issues = [];
+
+    if (total !== p.available) issues.push("the allocations do not use the exact available total");
+    if (allocations.life < lifeMinimum) {
+      issues.push("life support is below its medical minimum");
+      this.oxygen = Math.max(0, this.oxygen - 10);
+    }
+    if (allocations.cooling < p.coolingMin) {
+      issues.push("cooling is below the thermal minimum");
+      this.heat = Math.min(100, this.heat + 14);
+    }
+    if (allocations.navigation < p.navigationMin) {
+      issues.push("navigation is below the return-corridor minimum");
+      this.trajectory = Math.max(0, this.trajectory - 14);
+    }
+
+    if (issues.length > 0) {
+      this.power = Math.max(0, this.power - 5);
+      this.error(player, `Allocation rejected: ${issues.join("; ")}.`);
+      this.broadcastState();
+      return;
+    }
+
+    const lifeSurplus = allocations.life - lifeMinimum;
+    const coolingSurplus = allocations.cooling - p.coolingMin;
+    const navigationSurplus = allocations.navigation - p.navigationMin;
+    this.oxygen = Math.min(100, this.oxygen + lifeSurplus * 0.8);
+    this.heat = Math.max(0, this.heat - coolingSurplus * 1.2);
+    this.trajectory = Math.min(100, this.trajectory + navigationSurplus * 2);
+    this.missionData = Math.min(100, this.missionData + allocations.science * 3);
+    this.addCompleted("allocation");
+    this.statusMessage = `Power bus stabilized. ${allocations.science} units preserved for science.`;
+    this.broadcastState();
+    setTimeout(() => {
+      if (this.phase === "power") this.transition("navigation");
+    }, 1400);
+  }
+
+  handleBurn(player, message) {
+    if (this.hasCompleted("burn_programmed")) return;
+    const direction = typeof message.direction === "string" ? message.direction.toLowerCase() : "";
+    const seconds = Number(message.value);
+    const n = this.scenario.navigation;
+
+    if (!["prograde", "retrograde"].includes(direction) || !Number.isInteger(seconds) || seconds < 1 || seconds > 180) {
+      return this.error(player, "Enter a burn direction and a whole-number duration between 1 and 180 seconds.");
+    }
+
+    if (direction !== n.direction || seconds !== n.answerSeconds) {
+      const durationError = Math.abs(seconds - n.answerSeconds);
+      this.trajectory = Math.max(0, this.trajectory - Math.min(18, 7 + durationError * 0.6));
+      this.power = Math.max(0, this.power - 5);
+      this.error(player, "Burn solution rejected. Recheck drift sign, effective acceleration, direction, and rounding.");
+      this.broadcastState();
+      return;
+    }
+
+    this.addCompleted("burn_programmed");
+    this.trajectory = Math.min(100, this.trajectory + 24);
+    this.missionData = Math.min(100, this.missionData + 8);
+    this.statusMessage = "Correction burn complete. Free-return trajectory restored.";
+    this.broadcastState();
+    setTimeout(() => {
+      if (this.phase === "navigation") this.transition("reentry");
+    }, 1400);
+  }
+
+  handleEntryAngle(player, rawValue) {
+    if (this.hasCompleted("entry_angle")) return;
+    const angle = Number(rawValue);
+    const target = this.scenario.reentry.answerAngle;
+    if (!Number.isFinite(angle) || angle < 4 || angle > 9) {
+      return this.error(player, "Enter a valid entry angle between 4.0° and 9.0°.");
+    }
+
+    if (Math.abs(angle - target) > 0.051) {
+      this.heat = Math.min(100, this.heat + 10);
+      this.trajectory = Math.max(0, this.trajectory - 10);
+      this.error(player, "Entry solution rejected. Apply the weather shift, intersect every limit, then use the midpoint.");
+      this.broadcastState();
+      return;
+    }
+
+    this.addCompleted("entry_angle");
+    this.angleLockedAt = this.phaseSeconds;
+    this.statusMessage = "Entry angle locked. Descent clock running; calculate the parachute window.";
+    this.broadcastState();
+  }
+
+  handleParachutes(player) {
+    if (!this.hasCompleted("entry_angle")) return this.error(player, "Lock the entry angle before parachute deployment.");
+    if (this.hasCompleted("parachute_attempted")) return;
+
+    this.addCompleted("parachute_attempted");
+    const elapsed = Math.max(0, this.phaseSeconds - this.angleLockedAt);
+    const r = this.scenario.reentry;
+
+    if (elapsed < r.earliestChute) {
+      this.finish(false, "Parachutes deployed above their maximum safe velocity and failed.");
+      return;
+    }
+    if (elapsed > r.latestChute) {
+      this.finish(false, "Parachutes deployed below the minimum recovery altitude.");
+      return;
+    }
+
+    this.addCompleted("parachutes");
+    const averageMargin = (this.oxygen + this.power + (100 - this.heat) + this.trajectory) / 4;
+    let rating = "SURVIVAL RETURN";
+    if (this.missionData >= 55 && averageMargin >= 68) rating = "SCIENTIFIC TRIUMPH";
+    else if (averageMargin >= 52) rating = "NOMINAL RETURN";
+    this.finish(true, `Splashdown confirmed. Mission rating: ${rating}.`);
+  }
+
   transition(phase) {
     this.phase = phase;
     this.phaseIndex += 1;
     this.phaseSeconds = 0;
     this.completedActions = [];
+    this.angleLockedAt = null;
 
     if (phase === "launch") {
-      this.phaseDeadline = 75;
-      this.objective = "Complete launch configuration";
-      this.statusMessage = "T-minus 75 seconds. Guidance, pressure, authorization.";
+      this.phaseDeadline = 150;
+      this.objective = "Deduce the launch procedure";
+      this.objectiveDetail = "Five controls, one valid order. Read every assigned station brief before clicking.";
+      this.statusMessage = "T-minus 150 seconds. Procedure constraints distributed to the crew.";
       this.alertLevel = "warning";
     } else if (phase === "power") {
-      this.phaseDeadline = 100;
-      this.objective = "Stabilize the overheating power bus";
-      this.statusMessage = "Bus B thermal runaway detected.";
+      this.phaseDeadline = 180;
+      this.objective = "Allocate the emergency power bus";
+      this.objectiveDetail = "Meet all safety minimums, use the exact available total, then decide how much margin to preserve for science.";
+      this.statusMessage = "Bus B thermal runaway detected. Manual allocation required.";
       this.alertLevel = "critical";
-      this.power = Math.min(this.power, 86);
+      this.power = Math.min(this.power, 88);
+      this.heat = Math.max(this.heat, 28);
     } else if (phase === "navigation") {
-      this.phaseDeadline = 150;
-      this.objective = "Calculate and execute the correction burn";
-      this.statusMessage = "Free-return trajectory error: 117 m/s correction required.";
+      this.phaseDeadline = 180;
+      this.objective = "Calculate the correction burn";
+      this.objectiveDetail = "Determine direction and duration from target Δv, drift, rated acceleration, and engine efficiency.";
+      this.statusMessage = "Free-return corridor degrading. One continuous correction burn available.";
       this.alertLevel = "warning";
-      this.trajectory = Math.min(this.trajectory, 66);
+      this.trajectory = Math.min(this.trajectory, 62);
     } else if (phase === "reentry") {
-      this.phaseDeadline = 60;
-      this.objective = "Survive re-entry and splash down";
-      this.statusMessage = "Entry interface. Set corridor angle before peak heating.";
+      this.phaseDeadline = 180;
+      this.objective = "Solve the entry corridor and chute window";
+      this.objectiveDetail = "First intersect the angle constraints. Then use speed and altitude equations to calculate the safe descent-clock window.";
+      this.statusMessage = "Entry interface approaching. Crew calculations required.";
       this.alertLevel = "critical";
-      this.heat = Math.max(this.heat, 35);
+      this.heat = Math.max(this.heat, 34);
     }
 
     this.broadcastState();
@@ -451,31 +778,28 @@ class MissionRoom {
     if (this.disposed || ["lobby", "won", "lost"].includes(this.phase)) return;
     this.missionSeconds += 1;
     this.phaseSeconds += 1;
-    this.oxygen = Math.max(0, this.oxygen - 0.055);
-    this.power = Math.max(0, this.power - 0.045);
+    this.oxygen = Math.max(0, this.oxygen - 0.035);
+    this.power = Math.max(0, this.power - 0.03);
 
     if (this.phase === "power") {
-      this.power = Math.max(0, this.power - 0.12);
-      this.oxygen = Math.max(0, this.oxygen - 0.05);
-      this.heat = Math.min(100, this.heat + (this.hasCompleted("reroute_cooling") ? 0.02 : 0.17));
+      this.power = Math.max(0, this.power - 0.08);
+      this.heat = Math.min(100, this.heat + 0.09);
     }
 
     if (this.phase === "navigation") {
-      this.trajectory = Math.max(0, this.trajectory - 0.08);
+      this.trajectory = Math.max(0, this.trajectory - 0.045);
     }
 
     if (this.phase === "reentry") {
-      const angleLocked = this.hasCompleted("entry_angle");
-      const heatingRate = this.phaseSeconds < 25 ? (angleLocked ? 1.1 : 1.55) : -0.85;
-      this.heat = Math.max(0, Math.min(100, this.heat + heatingRate));
-
-      if (this.phaseSeconds === 20 && angleLocked) {
-        this.statusMessage = "Peak heating passed. Parachute corridor GREEN for 20 seconds.";
-        this.alertLevel = "normal";
-      }
-      if (this.phaseSeconds === 41) {
-        this.statusMessage = "Parachute corridor missed. Immediate deployment required.";
-        this.alertLevel = "critical";
+      if (this.angleLockedAt === null) {
+        this.heat = Math.min(100, this.heat + (this.phaseSeconds > 75 ? 0.32 : 0.08));
+      } else {
+        const descent = Math.max(0, this.phaseSeconds - this.angleLockedAt);
+        this.heat = Math.max(0, Math.min(100, this.heat + (descent < 22 ? 1.15 : -0.55)));
+        if (descent > this.scenario.reentry.latestChute) {
+          this.trajectory = Math.max(0, this.trajectory - 0.6);
+          this.alertLevel = "critical";
+        }
       }
     }
 
@@ -497,6 +821,9 @@ class MissionRoom {
     this.phaseDeadline = 0;
     this.alertLevel = success ? "normal" : "critical";
     this.objective = success ? "Mission accomplished" : "Mission lost";
+    this.objectiveDetail = success
+      ? "Review your remaining margins and mission data, then try a newly randomized mission."
+      : "Identify the assumption that failed. A reset generates new numbers and a new procedure.";
     this.statusMessage = message;
     this.broadcastState();
   }
@@ -518,11 +845,10 @@ class MissionRoom {
   }
 
   broadcastState() {
-    const state = this.publicState();
     for (const player of this.players.values()) {
       safeSend(player.socket, {
         type: "state",
-        state,
+        state: this.stateFor(player),
         reconnectionToken: player.reconnectToken,
       });
     }
@@ -541,7 +867,7 @@ class MissionRoom {
 }
 
 const httpServer = createServer(serveStatic);
-const websocketServer = new WebSocketServer({ server: httpServer, path: "/ws", maxPayload: 4096 });
+const websocketServer = new WebSocketServer({ server: httpServer, path: "/ws", maxPayload: 8192 });
 
 websocketServer.on("connection", (socket) => {
   socket.isAlive = true;
@@ -622,11 +948,12 @@ websocketServer.on("connection", (socket) => {
   socket.on("close", () => {
     clearTimeout(joinTimeout);
     if (!socket.context) return;
-    rooms.get(socket.context.roomCode)?.handleDisconnect(socket.context.sessionId, socket, false);
+    const room = rooms.get(socket.context.roomCode);
+    room?.handleDisconnect(socket.context.sessionId, socket);
   });
 });
 
-const heartbeat = setInterval(() => {
+const heartbeatTimer = setInterval(() => {
   for (const socket of websocketServer.clients) {
     if (!socket.isAlive) {
       socket.terminate();
@@ -635,16 +962,17 @@ const heartbeat = setInterval(() => {
     socket.isAlive = false;
     socket.ping();
   }
-}, 15_000);
+}, 20_000);
 
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`[PERILUNE] Running on http://localhost:${PORT}`);
+  console.log(`Lunar Mission listening on http://0.0.0.0:${PORT}`);
 });
 
 function shutdown() {
-  clearInterval(heartbeat);
+  clearInterval(heartbeatTimer);
   for (const room of rooms.values()) room.dispose();
-  websocketServer.close(() => httpServer.close(() => process.exit(0)));
+  websocketServer.close();
+  httpServer.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000).unref();
 }
 

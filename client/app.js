@@ -2,7 +2,7 @@
   "use strict";
 
   const canvas = document.querySelector("#renderCanvas");
-  const sceneController = window.createPeriluneScene(canvas);
+  const sceneController = window.createLunarMissionScene(canvas);
 
   let socket = null;
   let currentState = null;
@@ -45,7 +45,8 @@
   const networkState = element("#network-state");
   const toast = element("#toast");
 
-  playerNameInput.value = localStorage.getItem("perilune_player_name") || "";
+  const oldPlayerName = localStorage.getItem("perilune_player_name");
+  playerNameInput.value = localStorage.getItem("lunar_mission_player_name") || oldPlayerName || "";
   const inviteCode = new URLSearchParams(window.location.search).get("room");
   if (inviteCode) roomCodeInput.value = inviteCode.toUpperCase();
 
@@ -58,7 +59,7 @@
     toast.textContent = message;
     toast.classList.add("show");
     window.clearTimeout(toastTimeout);
-    toastTimeout = window.setTimeout(() => toast.classList.remove("show"), 2500);
+    toastTimeout = window.setTimeout(() => toast.classList.remove("show"), 3200);
   }
 
   function setConnecting(message, busy) {
@@ -70,7 +71,7 @@
   function playerName() {
     const value = playerNameInput.value.trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 18);
     if (!value) throw new Error("Enter a call sign first.");
-    localStorage.setItem("perilune_player_name", value);
+    localStorage.setItem("lunar_mission_player_name", value);
     return value;
   }
 
@@ -116,7 +117,7 @@
           roomCode = message.roomCode;
           sessionId = message.sessionId;
           reconnectionToken = message.reconnectionToken;
-          localStorage.setItem("perilune_reconnection_token", reconnectionToken);
+          localStorage.setItem("lunar_mission_reconnection_token", reconnectionToken);
           roomDisplay.textContent = roomCode;
           reconnectAttempts = 0;
           intentionalLeave = false;
@@ -153,15 +154,13 @@
         currentState = message.state;
         if (message.reconnectionToken) {
           reconnectionToken = message.reconnectionToken;
-          localStorage.setItem("perilune_reconnection_token", reconnectionToken);
+          localStorage.setItem("lunar_mission_reconnection_token", reconnectionToken);
         }
         render(message.state);
       } else if (message.type === "notice") {
         showToast(message.message);
       } else if (message.type === "error") {
         showToast(message.message);
-      } else if (message.type === "pong") {
-        // Application-level heartbeat response.
       }
     });
 
@@ -201,7 +200,7 @@
       networkState.textContent = "DISCONNECTED";
       networkState.style.color = "var(--red)";
       showToast("Reconnection window expired. Rejoin with the room code.");
-      localStorage.removeItem("perilune_reconnection_token");
+      localStorage.removeItem("lunar_mission_reconnection_token");
       return;
     }
 
@@ -243,74 +242,13 @@
   function phaseLabel(phase) {
     return {
       lobby: "Crew assembly",
-      launch: "Launch and orbital checkout",
-      power: "Deep-space power emergency",
+      launch: "Launch logic procedure",
+      power: "Emergency power allocation",
       navigation: "Lunar correction burn",
-      reentry: "Atmospheric re-entry",
-      won: "Mission accomplished",
+      reentry: "Re-entry and splashdown",
+      won: "Mission complete",
       lost: "Mission lost",
-    }[phase] || phase;
-  }
-
-  function objectiveDescription(phase) {
-    return {
-      lobby: "Assign a unique station, mark yourself ready, and wait for the mission host to begin.",
-      launch: "Complete the three launch actions. The order matters: prepare the ship before final authorization.",
-      power: "A power bus is overheating. Protect life support by executing the correct emergency sequence.",
-      navigation: "The spacecraft is drifting off the free-return trajectory. Combine the crew’s figures and calculate the burn duration.",
-      reentry: "Set a survivable entry angle, monitor the heat peak, and deploy parachutes only when the green corridor opens.",
-      won: "The capsule has splashed down. Your crew completed the lunar flyby and returned alive.",
-      lost: "The spacecraft can no longer sustain the crew or complete a controlled return.",
-    }[phase] || "";
-  }
-
-  const clues = {
-    lobby: {
-      default: "Different roles receive different pieces of information. Talk constantly; do not assume everyone sees what you see.",
-    },
-    launch: {
-      Commander: "Launch authorization must be the final action, after guidance is armed and the cabin is sealed.",
-      Pilot: "Arm flight guidance first. The computer needs a valid attitude solution before ignition.",
-      Systems: "Seal the cabin before launch. Nominal pressure is 14.7 psi.",
-      Navigator: "The ascent corridor is loaded, but guidance must be armed before the commander authorizes launch.",
-      Science: "Your payload is secured. Do not delay cabin sealing for additional checks.",
-      Medical: "Cabin pressure must be confirmed before launch authorization.",
-      default: "Sequence: arm guidance, seal cabin, authorize launch.",
-    },
-    power: {
-      Commander: "The approved sequence is: isolate payload → reroute cooling → prioritize life support.",
-      Pilot: "Attitude control is stable. Do not spend power on propulsion during this fault.",
-      Navigator: "The current trajectory is safe. Power can be removed from the science payload.",
-      Systems: "Bus B is overheating. Isolate the payload before rerouting coolant or the breaker will trip.",
-      Science: "The payload can be disconnected without losing mission-critical navigation data.",
-      Medical: "Life support must be the final priority after the hot bus is isolated and cooling restored.",
-      default: "Protect life support, but only after isolating the hot circuit and restoring cooling.",
-    },
-    navigation: {
-      Commander: "Enter the burn as a whole number of seconds after the crew agrees.",
-      Pilot: "The main engine acceleration for this maneuver is 3 m/s².",
-      Navigator: "Required velocity change is 117 m/s. Burn duration equals Δv divided by acceleration.",
-      Systems: "Power is sufficient for one continuous burn; do not split it.",
-      Science: "Use t = Δv / a. The values supplied by Pilot and Navigator are exact for this game.",
-      Medical: "A continuous burn is safe for the crew. No medical constraint changes the calculation.",
-      default: "Combine Δv = 117 m/s with acceleration = 3 m/s².",
-    },
-    reentry: {
-      Commander: "Set the angle first. Authorize parachutes only when the corridor indicator turns green.",
-      Pilot: "Target the center of the safe corridor: 6.5°.",
-      Navigator: "The survivable entry corridor is 5.8° to 7.2°. Centerline minimizes risk.",
-      Systems: "Parachutes cannot survive deployment before the heat peak passes and the corridor opens.",
-      Science: "A shallow entry risks skipping out; a steep entry increases heating. Use the centerline.",
-      Medical: "The crew can tolerate the centerline profile. Wait for the green deployment corridor.",
-      default: "Use 6.5°, then wait for the green parachute corridor.",
-    },
-    won: { default: "Recovery forces have acquired the capsule beacon." },
-    lost: { default: "Review the sequence and communicate each clue aloud on the next attempt." },
-  };
-
-  function clueFor(phase, role) {
-    const phaseClues = clues[phase] || clues.lobby;
-    return phaseClues[role] || phaseClues.default;
+    }[phase] || "Lunar Mission";
   }
 
   function completedSet(state) {
@@ -326,75 +264,164 @@
     button.disabled = done || !socket;
     button.addEventListener("click", () => send("action", { action }));
     const hint = document.createElement("small");
-    hint.textContent = `Suggested: ${preferredRole}`;
+    hint.textContent = `Suggested station: ${preferredRole}`;
     wrapper.append(button, hint);
     return wrapper;
+  }
+
+  function numberField(label, placeholder) {
+    const field = document.createElement("label");
+    field.className = "allocation-field";
+    const title = document.createElement("span");
+    title.textContent = label;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.max = "100";
+    input.step = "1";
+    input.placeholder = placeholder;
+    field.append(title, input);
+    return { field, input };
+  }
+
+  function renderLaunchActions(done) {
+    actions.append(
+      actionButton("Align flight computer", "align_computer", "Navigator / Science", done.has("align_computer")),
+      actionButton("Start oxygen scrubbers", "start_scrubbers", "Medical", done.has("start_scrubbers")),
+      actionButton("Seal cabin", "seal_cabin", "Systems", done.has("seal_cabin")),
+      actionButton("Arm guidance", "arm_guidance", "Pilot", done.has("arm_guidance")),
+      actionButton("Authorize launch", "authorize_launch", "Commander", done.has("authorize_launch")),
+    );
+  }
+
+  function renderPowerActions(done) {
+    if (done.has("allocation")) {
+      const confirmed = document.createElement("button");
+      confirmed.className = "action-done";
+      confirmed.disabled = true;
+      confirmed.textContent = "✓ Allocation accepted";
+      actions.append(confirmed);
+      return;
+    }
+
+    const panel = document.createElement("div");
+    panel.className = "allocation-panel";
+    const grid = document.createElement("div");
+    grid.className = "allocation-grid";
+    const life = numberField("Life support", "units");
+    const cooling = numberField("Cooling", "units");
+    const navigation = numberField("Navigation", "units");
+    const science = numberField("Science", "units");
+    grid.append(life.field, cooling.field, navigation.field, science.field);
+
+    const footer = document.createElement("div");
+    footer.className = "allocation-footer";
+    const total = document.createElement("strong");
+    total.textContent = "TOTAL: 0";
+    const submit = document.createElement("button");
+    submit.className = "primary";
+    submit.textContent = "Submit allocation";
+    const inputs = [life.input, cooling.input, navigation.input, science.input];
+    const updateTotal = () => {
+      const value = inputs.reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+      total.textContent = `TOTAL: ${value}`;
+    };
+    for (const input of inputs) input.addEventListener("input", updateTotal);
+    submit.addEventListener("click", () => {
+      send("action", {
+        action: "submit_allocation",
+        allocations: {
+          life: Number(life.input.value),
+          cooling: Number(cooling.input.value),
+          navigation: Number(navigation.input.value),
+          science: Number(science.input.value),
+        },
+      });
+    });
+    const hint = document.createElement("small");
+    hint.textContent = "Use the exact total. Safety minimums are distributed across station briefs.";
+    footer.append(total, submit, hint);
+    panel.append(grid, footer);
+    actions.append(panel);
+  }
+
+  function renderNavigationActions(done) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "calculation-panel";
+    const directionLabel = document.createElement("label");
+    directionLabel.className = "allocation-field";
+    const directionTitle = document.createElement("span");
+    directionTitle.textContent = "Burn direction";
+    const direction = document.createElement("select");
+    direction.innerHTML = '<option value="">Select direction</option><option value="prograde">Prograde</option><option value="retrograde">Retrograde</option>';
+    direction.disabled = done.has("burn_programmed");
+    directionLabel.append(directionTitle, direction);
+
+    const time = numberField("Burn duration", "whole seconds");
+    time.input.min = "1";
+    time.input.max = "180";
+    time.input.disabled = done.has("burn_programmed");
+
+    const button = document.createElement("button");
+    button.textContent = done.has("burn_programmed") ? "✓ Burn programmed" : "Program burn";
+    button.className = done.has("burn_programmed") ? "action-done" : "primary";
+    button.disabled = done.has("burn_programmed");
+    button.addEventListener("click", () => send("action", {
+      action: "program_burn",
+      direction: direction.value,
+      value: Number(time.input.value),
+    }));
+
+    const hint = document.createElement("small");
+    hint.textContent = "Adjust Δv for drift, calculate effective acceleration, then round once at the end.";
+    wrapper.append(directionLabel, time.field, button, hint);
+    actions.append(wrapper);
+  }
+
+  function renderReentryActions(state, done) {
+    const angleWrapper = document.createElement("div");
+    angleWrapper.className = "calculation-panel";
+    const angle = numberField("Entry angle", "degrees to 0.1°");
+    angle.input.step = "0.1";
+    angle.input.min = "4";
+    angle.input.max = "9";
+    angle.input.disabled = done.has("entry_angle");
+    const angleButton = document.createElement("button");
+    angleButton.textContent = done.has("entry_angle") ? "✓ Angle locked" : "Lock entry angle";
+    angleButton.className = done.has("entry_angle") ? "action-done" : "primary";
+    angleButton.disabled = done.has("entry_angle");
+    angleButton.addEventListener("click", () => send("action", { action: "set_entry_angle", value: Number(angle.input.value) }));
+    const angleHint = document.createElement("small");
+    angleHint.textContent = "Shift the nominal corridor, intersect every limit, and choose the midpoint.";
+    angleWrapper.append(angle.field, angleButton, angleHint);
+    actions.append(angleWrapper);
+
+    if (done.has("entry_angle")) {
+      const chute = document.createElement("div");
+      chute.className = "action-group chute-control";
+      const button = document.createElement("button");
+      button.className = "danger-action";
+      button.textContent = done.has("parachutes") ? "✓ Parachutes deployed" : `Deploy parachutes · T+${String(state.descentSeconds ?? 0).padStart(2, "0")}`;
+      button.disabled = done.has("parachutes") || done.has("parachute_attempted");
+      button.addEventListener("click", () => send("action", { action: "deploy_parachutes" }));
+      const hint = document.createElement("small");
+      hint.textContent = "One attempt. Calculate the overlap between velocity-safe and altitude-safe time windows.";
+      chute.append(button, hint);
+      actions.append(chute);
+    }
   }
 
   function renderActions(state) {
     actions.replaceChildren();
     const done = completedSet(state);
 
-    if (state.phase === "launch") {
-      actions.append(
-        actionButton("Arm guidance", "arm_guidance", "Pilot", done.has("arm_guidance")),
-        actionButton("Seal cabin", "seal_cabin", "Systems", done.has("seal_cabin")),
-        actionButton("Authorize launch", "authorize_launch", "Commander", done.has("authorize_launch")),
-      );
-    } else if (state.phase === "power") {
-      actions.append(
-        actionButton("Isolate payload", "isolate_payload", "Science", done.has("isolate_payload")),
-        actionButton("Reroute cooling", "reroute_cooling", "Systems", done.has("reroute_cooling")),
-        actionButton("Prioritize life support", "prioritize_life_support", "Commander", done.has("prioritize_life_support")),
-      );
-    } else if (state.phase === "navigation") {
-      const wrapper = document.createElement("div");
-      wrapper.className = "action-group";
-      const input = document.createElement("input");
-      input.type = "number";
-      input.min = "1";
-      input.max = "180";
-      input.placeholder = "Burn seconds";
-      input.disabled = done.has("burn_39");
-      const button = document.createElement("button");
-      button.textContent = done.has("burn_39") ? "✓ Burn programmed" : "Program burn";
-      button.className = done.has("burn_39") ? "action-done" : "";
-      button.disabled = done.has("burn_39");
-      button.addEventListener("click", () => send("action", { action: "program_burn", value: Number(input.value) }));
-      const hint = document.createElement("small");
-      hint.textContent = "Combine Navigator + Pilot data";
-      wrapper.append(input, button, hint);
-      actions.append(wrapper);
-    } else if (state.phase === "reentry") {
-      const angleWrapper = document.createElement("div");
-      angleWrapper.className = "action-group";
-      const angle = document.createElement("input");
-      angle.type = "number";
-      angle.step = "0.1";
-      angle.placeholder = "Entry angle °";
-      angle.disabled = done.has("entry_angle");
-      const angleButton = document.createElement("button");
-      angleButton.textContent = done.has("entry_angle") ? "✓ Angle locked" : "Set entry angle";
-      angleButton.className = done.has("entry_angle") ? "action-done" : "";
-      angleButton.disabled = done.has("entry_angle");
-      angleButton.addEventListener("click", () => send("action", { action: "set_entry_angle", value: Number(angle.value) }));
-      const angleHint = document.createElement("small");
-      angleHint.textContent = "Suggested: Pilot + Navigator";
-      angleWrapper.append(angle, angleButton, angleHint);
-
-      const corridorOpen = state.phaseSeconds >= 20 && state.phaseSeconds <= 40 && done.has("entry_angle");
-      const chute = actionButton(
-        corridorOpen ? "Deploy parachutes — GREEN" : "Deploy parachutes",
-        "deploy_parachutes",
-        "Commander + Systems",
-        done.has("parachutes"),
-      );
-      const chuteButton = chute.querySelector("button");
-      if (chuteButton && !done.has("parachutes")) chuteButton.classList.toggle("primary", corridorOpen);
-      actions.append(angleWrapper, chute);
-    } else if (state.phase === "won" || state.phase === "lost") {
+    if (state.phase === "launch") renderLaunchActions(done);
+    else if (state.phase === "power") renderPowerActions(done);
+    else if (state.phase === "navigation") renderNavigationActions(done);
+    else if (state.phase === "reentry") renderReentryActions(state, done);
+    else if (state.phase === "won" || state.phase === "lost") {
       const retry = document.createElement("button");
-      retry.textContent = "Return to lobby";
+      retry.textContent = "Generate new mission";
       retry.disabled = state.hostSessionId !== sessionId;
       retry.addEventListener("click", () => send("reset"));
       actions.append(retry);
@@ -430,11 +457,11 @@
     missionTime.textContent = formatTime(state.missionSeconds);
     statusMessage.textContent = state.statusMessage;
     objectiveTitle.textContent = state.objective;
-    objectiveCopy.textContent = objectiveDescription(state.phase);
+    objectiveCopy.textContent = state.objectiveDetail || "";
     alertDot.className = `alert-dot ${state.alertLevel === "normal" ? "" : state.alertLevel}`;
 
     const me = state.players[sessionId];
-    roleClue.textContent = clueFor(state.phase, me?.role || "default");
+    roleClue.textContent = state.privateBrief || "Choose a role to receive your mission information.";
     if (me && roleSelect.value !== me.role) roleSelect.value = me.role;
     readyButton.textContent = me?.ready ? "Not ready" : "Ready";
     readyButton.classList.toggle("action-done", Boolean(me?.ready));
@@ -448,14 +475,14 @@
     setGauge("power", state.power);
     setGauge("heat", state.heat);
     setGauge("trajectory", state.trajectory);
+    setGauge("data", state.missionData);
 
     if (state.phaseDeadline > 0 && !["won", "lost"].includes(state.phase)) {
       const remaining = Math.max(0, state.phaseDeadline - state.phaseSeconds);
-      const corridor = state.phase === "reentry" && state.phaseSeconds >= 20 && state.phaseSeconds <= 40;
-      phaseTimer.textContent = corridor
-        ? `PARACHUTE CORRIDOR: GREEN · ${remaining}s remaining`
+      phaseTimer.textContent = state.phase === "reentry" && state.descentSeconds !== null
+        ? `DESCENT CLOCK: T+${String(state.descentSeconds).padStart(2, "0")} · PHASE DEADLINE: ${remaining}s`
         : `PHASE DEADLINE: ${remaining}s`;
-      phaseTimer.style.color = corridor ? "var(--green)" : "var(--amber)";
+      phaseTimer.style.color = state.phase === "reentry" && state.descentSeconds !== null ? "var(--cyan)" : "var(--amber)";
     } else {
       phaseTimer.textContent = "No active deadline";
     }
@@ -485,6 +512,7 @@
 
   element("#leave-button").addEventListener("click", () => {
     intentionalLeave = true;
+    localStorage.removeItem("lunar_mission_reconnection_token");
     localStorage.removeItem("perilune_reconnection_token");
     if (socket?.readyState === WebSocket.OPEN) send("leave");
     socket?.close();
@@ -493,17 +521,19 @@
 
   window.addEventListener("beforeunload", () => {
     if (reconnectionToken && !intentionalLeave) {
-      localStorage.setItem("perilune_reconnection_token", reconnectionToken);
+      localStorage.setItem("lunar_mission_reconnection_token", reconnectionToken);
     }
   });
 
-  const cachedToken = localStorage.getItem("perilune_reconnection_token");
+  const cachedToken = localStorage.getItem("lunar_mission_reconnection_token")
+    || localStorage.getItem("perilune_reconnection_token");
   if (cachedToken) {
     reconnectionToken = cachedToken;
     setConnecting("Attempting to restore your mission…", true);
     openSocket({ type: "reconnect", token: cachedToken }, true)
       .then(() => setConnecting("", false))
       .catch(() => {
+        localStorage.removeItem("lunar_mission_reconnection_token");
         localStorage.removeItem("perilune_reconnection_token");
         reconnectionToken = "";
         setConnecting("", false);
