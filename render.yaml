@@ -2,6 +2,7 @@ services:
   - type: web
     name: perilune
     runtime: node
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
@@ -11,4 +12,3 @@ services:
         value: 22.16.0
       - key: NODE_ENV
         value: production
-plan: free
