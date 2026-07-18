@@ -1,21 +1,22 @@
-# LUNAR MISSION MVP — v0.2
+# LUNAR MISSION — v0.3
 
-**LUNAR MISSION** is a private browser game for **1–6 players**. The crew combines incomplete role-specific clues to solve a launch logic procedure, allocate emergency power, calculate a correction burn, and determine a safe re-entry and parachute window.
+**LUNAR MISSION** is a private browser game for **1–6 players**. The crew combines incomplete role-specific clues to solve a launch logic procedure, allocate emergency power, calculate a correction burn, and survive re-entry.
 
-This version replaces the original guided checklist with actual deduction, calculation, and trade-offs.
+Version 0.3 keeps the harder v0.2 puzzles and rebuilds the browser presentation around a live mission display rather than a page of forms.
 
-## What changed in v0.2
+## What changed in v0.3
 
-- Public game name changed to **LUNAR MISSION**
-- Clues now come from the server and are private to each player
-- Unfilled roles are cross-assigned, so 1–6 players can always solve the mission
-- Solo training displays all six station briefs
-- Randomized mission variants reduce memorization
-- Five-action launch logic puzzle
-- Emergency allocation puzzle with safety minimums and a science-versus-margin trade-off
-- Navigation requires direction, drift adjustment, engine efficiency, and a rounded burn duration
-- Re-entry requires intersecting angle constraints and calculating a one-attempt parachute window
-- Mission Data gauge and final ratings: Survival Return, Nominal Return, or Scientific Triumph
+- Animated Earth–Moon mission display with phase-specific visuals
+- Visual launch interlocks, emergency power circuits, orbit preview, and re-entry descent
+- Circular spacecraft gauges with warning and critical states
+- Live re-entry velocity, altitude, heat, and descent telemetry
+- Crew activity feed showing who acted and what happened
+- Crew station cards pulse when a player performs an action
+- Generated cockpit hum, switch tones, warnings, success cues, screen shake, and flashes
+- Sound is optional and starts only after the player enables it
+- Inputs are no longer rebuilt every second, so calculations remain on screen while the server updates
+- Responsive layout for laptops and phones
+- Public game name remains **LUNAR MISSION** throughout the interface and health endpoint
 
 ## Mission flow
 
@@ -34,19 +35,20 @@ Expected first-run duration is approximately **12–20 minutes**, depending on c
 4. Drag all files and folders from the unzipped update into the repository and allow GitHub to replace files with the same names.
 5. Commit the changes to `main`.
 6. Render will automatically deploy the new commit.
+7. When Render shows **Live**, refresh the game with `Ctrl + Shift + R`.
 
-The Render service remains internally named `perilune` so the existing URL continues working. Players will see **LUNAR MISSION** everywhere in the game.
+The Render service remains internally named `perilune` so the existing URL continues working. The website itself is branded **LUNAR MISSION**.
 
 ## Project structure
 
 ```text
 client/
-  index.html       Browser interface and Lunar Mission branding
-  styles.css       Responsive visual design
-  scene.js         Procedural Babylon.js spacecraft cabin
-  app.js           Multiplayer client, private briefs, and puzzle controls
+  index.html       Game layout and Lunar Mission branding
+  styles.css       Responsive visual system and phase displays
+  scene.js         Procedural animated Babylon.js cockpit background
+  app.js           Multiplayer client, visuals, audio, briefs, and controls
 server/src/
-  server.js        Hosting, WebSockets, private clues, randomized scenarios, and game rules
+  server.js        Hosting, WebSockets, event feed, telemetry, clues, and rules
 render.yaml        Existing free Render deployment configuration
 ```
 

@@ -146,7 +146,7 @@ function serveStatic(request, response) {
   const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
   if (url.pathname === "/health") {
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    response.end(JSON.stringify({ status: "ok", game: "Lunar Mission", rooms: rooms.size }));
+    response.end(JSON.stringify({ status: "ok", game: "Lunar Mission", version: "0.3.0", rooms: rooms.size }));
     return;
   }
 
@@ -248,8 +248,11 @@ class MissionRoom {
     this.statusMessage = "Waiting for crew.";
     this.alertLevel = "normal";
     this.completedActions = [];
+    this.eventSequence = 0;
+    this.events = [];
     this.disposed = false;
     this.tickTimer = setInterval(() => this.tick(), 1000);
+    this.recordEvent(null, "Mission room created. Awaiting crew.", "info");
   }
 
   sharedState() {
@@ -283,7 +286,22 @@ class MissionRoom {
       objectiveDetail: this.objectiveDetail,
       statusMessage: this.statusMessage,
       alertLevel: this.alertLevel,
+      telemetry: this.telemetry(),
+      recentEvents: this.events.slice(-8),
       completedActions: this.completedActions.join(","),
+    };
+  }
+
+  telemetry() {
+    if (this.phase !== "reentry" || this.angleLockedAt === null) {
+      return { speed: null, altitude: null };
+    }
+
+    const elapsed = Math.max(0, this.phaseSeconds - this.angleLockedAt);
+    const profile = this.scenario.reentry;
+    return {
+      speed: Math.max(0, profile.speedStart - profile.speedDrop * elapsed),
+      altitude: Math.max(0, profile.altitudeStart - profile.altitudeDrop * elapsed),
     };
   }
 
@@ -399,6 +417,7 @@ class MissionRoom {
     this.players.set(sessionId, player);
     if (!this.hostSessionId) this.hostSessionId = sessionId;
     this.attachSocket(socket, player);
+    this.recordEvent(player, "Joined the crew.", "info");
     this.broadcastNotice(`${player.name} joined the crew.`);
     this.broadcastState();
     return player;
@@ -414,6 +433,7 @@ class MissionRoom {
     player.socket = socket;
     player.reconnectToken = randomId(24);
     this.attachSocket(socket, player);
+    this.recordEvent(player, "Reconnected to the mission.", "success");
     this.broadcastNotice(`${player.name} reconnected.`);
     this.broadcastState();
     return player;
@@ -455,6 +475,7 @@ class MissionRoom {
       this.hostSessionId = this.players.keys().next().value || "";
     }
 
+    this.recordEvent(player, "Left the crew.", "warning");
     this.broadcastNotice(`${player.name} left the crew.`);
     this.broadcastState();
     if (this.players.size === 0) this.dispose();
@@ -506,6 +527,7 @@ class MissionRoom {
 
     player.role = normalizedRole;
     player.ready = false;
+    this.recordEvent(player, normalizedRole ? `Selected ${normalizedRole} station.` : "Cleared station assignment.", "info");
     this.broadcastState();
   }
 
@@ -513,6 +535,7 @@ class MissionRoom {
     if (this.phase !== "lobby") return;
     if (!player.role) return this.error(player, "Select a station first.");
     player.ready = !player.ready;
+    this.recordEvent(player, player.ready ? "Reported ready for launch." : "Returned to standby.", player.ready ? "success" : "warning");
     this.broadcastState();
   }
 
@@ -549,6 +572,8 @@ class MissionRoom {
     this.statusMessage = "Waiting for crew.";
     this.alertLevel = "normal";
     this.completedActions = [];
+    this.events = [];
+    this.recordEvent(player, "Generated a new randomized mission profile.", "info");
     for (const crewMember of this.players.values()) crewMember.ready = false;
     this.broadcastState();
   }
@@ -577,6 +602,7 @@ class MissionRoom {
       return this.handleParachutes(player);
     }
 
+    this.recordEvent(player, "Attempted a control outside the current procedure.", "warning");
     this.error(player, "That control is not valid in the current mission phase.");
   }
 
@@ -588,6 +614,7 @@ class MissionRoom {
     if (action !== requiredAction) {
       this.power = Math.max(0, this.power - 4);
       this.trajectory = Math.max(0, this.trajectory - 3);
+      this.recordEvent(player, `${action.replaceAll("_", " ")} rejected: sequence constraint violated.`, "critical");
       this.error(player, "Sequence rejected. One or more crew constraints were violated.");
       this.broadcastState();
       return;
@@ -595,6 +622,7 @@ class MissionRoom {
 
     this.addCompleted(action);
     this.statusMessage = `${action.replaceAll("_", " ")} confirmed.`;
+    this.recordEvent(player, `${action.replaceAll("_", " ")} confirmed.`, "success");
     this.broadcastState();
 
     if (this.completedActions.length === expected.length) {
@@ -638,6 +666,7 @@ class MissionRoom {
 
     if (issues.length > 0) {
       this.power = Math.max(0, this.power - 5);
+      this.recordEvent(player, `Power allocation rejected: ${issues.join("; ")}.`, "critical");
       this.error(player, `Allocation rejected: ${issues.join("; ")}.`);
       this.broadcastState();
       return;
@@ -652,6 +681,7 @@ class MissionRoom {
     this.missionData = Math.min(100, this.missionData + allocations.science * 3);
     this.addCompleted("allocation");
     this.statusMessage = `Power bus stabilized. ${allocations.science} units preserved for science.`;
+    this.recordEvent(player, `Stabilized Bus B; ${allocations.science} units routed to science.`, "success");
     this.broadcastState();
     setTimeout(() => {
       if (this.phase === "power") this.transition("navigation");
@@ -672,6 +702,7 @@ class MissionRoom {
       const durationError = Math.abs(seconds - n.answerSeconds);
       this.trajectory = Math.max(0, this.trajectory - Math.min(18, 7 + durationError * 0.6));
       this.power = Math.max(0, this.power - 5);
+      this.recordEvent(player, `Burn command rejected (${direction || "no direction"}, ${Number.isFinite(seconds) ? `${seconds}s` : "invalid time"}).`, "critical");
       this.error(player, "Burn solution rejected. Recheck drift sign, effective acceleration, direction, and rounding.");
       this.broadcastState();
       return;
@@ -681,6 +712,7 @@ class MissionRoom {
     this.trajectory = Math.min(100, this.trajectory + 24);
     this.missionData = Math.min(100, this.missionData + 8);
     this.statusMessage = "Correction burn complete. Free-return trajectory restored.";
+    this.recordEvent(player, `Executed ${direction} correction burn for ${seconds}s.`, "success");
     this.broadcastState();
     setTimeout(() => {
       if (this.phase === "navigation") this.transition("reentry");
@@ -698,6 +730,7 @@ class MissionRoom {
     if (Math.abs(angle - target) > 0.051) {
       this.heat = Math.min(100, this.heat + 10);
       this.trajectory = Math.max(0, this.trajectory - 10);
+      this.recordEvent(player, `Entry command ${angle.toFixed(1)}° rejected.`, "critical");
       this.error(player, "Entry solution rejected. Apply the weather shift, intersect every limit, then use the midpoint.");
       this.broadcastState();
       return;
@@ -706,6 +739,7 @@ class MissionRoom {
     this.addCompleted("entry_angle");
     this.angleLockedAt = this.phaseSeconds;
     this.statusMessage = "Entry angle locked. Descent clock running; calculate the parachute window.";
+    this.recordEvent(player, `Locked entry angle at ${angle.toFixed(1)}°. Descent clock started.`, "success");
     this.broadcastState();
   }
 
@@ -715,6 +749,7 @@ class MissionRoom {
 
     this.addCompleted("parachute_attempted");
     const elapsed = Math.max(0, this.phaseSeconds - this.angleLockedAt);
+    this.recordEvent(player, `Commanded parachute deployment at T+${elapsed}s.`, "warning");
     const r = this.scenario.reentry;
 
     if (elapsed < r.earliestChute) {
@@ -771,6 +806,13 @@ class MissionRoom {
       this.heat = Math.max(this.heat, 34);
     }
 
+    const phaseNames = {
+      launch: "Launch procedure active.",
+      power: "Emergency power phase active.",
+      navigation: "Correction-burn phase active.",
+      reentry: "Atmospheric return phase active.",
+    };
+    this.recordEvent(null, phaseNames[phase] || `${phase} phase active.`, phase === "power" || phase === "reentry" ? "warning" : "info");
     this.broadcastState();
   }
 
@@ -825,7 +867,22 @@ class MissionRoom {
       ? "Review your remaining margins and mission data, then try a newly randomized mission."
       : "Identify the assumption that failed. A reset generates new numbers and a new procedure.";
     this.statusMessage = message;
+    this.recordEvent(null, message, success ? "success" : "critical");
     this.broadcastState();
+  }
+
+  recordEvent(player, text, severity = "info") {
+    this.eventSequence += 1;
+    this.events.push({
+      id: this.eventSequence,
+      missionSecond: this.missionSeconds,
+      actorSessionId: player?.sessionId || "",
+      actor: player?.name || "",
+      role: player?.role || "",
+      text,
+      severity,
+    });
+    if (this.events.length > 20) this.events.splice(0, this.events.length - 20);
   }
 
   hasCompleted(action) {
