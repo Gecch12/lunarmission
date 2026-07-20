@@ -1,192 +1,45 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#030811" />
-    <meta name="description" content="Lunar Mission — a cooperative science-based lunar mission game for 1–6 players." />
-    <title>LUNAR MISSION · Visual Mission</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <canvas id="renderCanvas" aria-label="Animated lunar spacecraft cabin"></canvas>
-    <div id="cinematic-flash" aria-hidden="true"></div>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LUNAR MISSION - ARTEMIS II</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<div id="connect" class="connect">
+  <div class="eyebrow">A COOPERATIVE MISSION GAME</div><h1>LUNAR MISSION</h1><h2>ARTEMIS II</h2>
+  <p>Navigate Orion around the Moon and return the crew safely to Earth.</p>
+  <input id="name" placeholder="CALL SIGN" maxlength="18">
+  <div class="join"><input id="room" placeholder="ROOM CODE" maxlength="6"><button id="join">JOIN</button></div>
+  <button id="create" class="primary">CREATE MISSION</button><small>1-6 players • browser • voice chat recommended</small>
+</div>
 
-    <main id="app">
-      <section id="connect-screen" class="glass connect-card">
-        <div class="connect-orbit" aria-hidden="true">
-          <span class="connect-earth"></span>
-          <span class="connect-path"></span>
-          <span class="connect-craft">◆</span>
-          <span class="connect-moon"></span>
-        </div>
-        <div class="eyebrow">COOPERATIVE SCIENCE MISSION</div>
-        <h1>LUNAR<br />MISSION</h1>
-        <p class="lede">Incomplete clues. Limited margins. One crew trying to get home.</p>
-
-        <label>
-          Call sign
-          <input id="player-name" maxlength="18" autocomplete="nickname" placeholder="Gabriel" />
-        </label>
-
-        <div class="join-grid">
-          <button id="create-button" class="primary">Create mission</button>
-          <div class="join-row">
-            <input id="room-code" maxlength="6" autocapitalize="characters" placeholder="ROOM CODE" />
-            <button id="join-button">Join</button>
-          </div>
-        </div>
-
-        <p id="connection-status" class="status-line" role="status"></p>
-        <div class="connect-facts">
-          <span>1–6 players</span><span>12–20 min</span><span>Browser co-op</span>
-        </div>
-        <p class="fine-print">No account or installation. Use a separate voice call. Solo training reveals all six station briefs.</p>
-      </section>
-
-      <section id="game-screen" class="hidden game-layout">
-        <header class="glass topbar">
-          <div>
-            <div class="eyebrow">LUNAR MISSION · ROOM <span id="room-display">------</span></div>
-            <h2 id="phase-title">Crew assembly</h2>
-          </div>
-          <div id="phase-route" class="phase-route" aria-label="Mission phase progress">
-            <span data-route="launch">01 <b>LAUNCH</b></span>
-            <i></i>
-            <span data-route="power">02 <b>POWER</b></span>
-            <i></i>
-            <span data-route="navigation">03 <b>BURN</b></span>
-            <i></i>
-            <span data-route="reentry">04 <b>RETURN</b></span>
-          </div>
-          <div class="mission-clock">
-            <span id="mission-time">00:00</span>
-            <small>MISSION ELAPSED</small>
-          </div>
-        </header>
-
-        <aside class="glass crew-panel">
-          <div class="panel-heading">
-            <h3>Crew stations</h3>
-            <span id="crew-count">0 / 6</span>
-          </div>
-          <div id="crew-list" class="crew-list"></div>
-
-          <div id="role-controls" class="role-controls">
-            <label>
-              Your station
-              <select id="role-select">
-                <option value="">Select role</option>
-                <option>Commander</option>
-                <option>Pilot</option>
-                <option>Navigator</option>
-                <option>Systems</option>
-                <option>Science</option>
-                <option>Medical</option>
-              </select>
-            </label>
-            <button id="ready-button">Ready</button>
-            <button id="start-button" class="primary hidden">Start mission</button>
-          </div>
-
-          <div class="activity-section">
-            <div class="panel-heading compact">
-              <h3>Crew activity</h3>
-              <span>LIVE</span>
-            </div>
-            <div id="activity-feed" class="activity-feed">
-              <p class="empty-state">Mission activity will appear here.</p>
-            </div>
-          </div>
-        </aside>
-
-        <main class="stage-column">
-          <section id="visual-stage" class="glass visual-stage" aria-live="polite">
-            <div class="visual-stage-head">
-              <div>
-                <span class="eyebrow">MISSION VISUAL</span>
-                <strong id="visual-title">Earth departure corridor</strong>
-              </div>
-              <div id="visual-telemetry" class="visual-telemetry"></div>
-            </div>
-            <div id="phase-visual" class="phase-visual"></div>
-          </section>
-
-          <section class="glass mission-panel">
-            <div class="alert-line">
-              <span id="alert-dot" class="alert-dot"></span>
-              <strong id="status-message">Waiting for crew.</strong>
-            </div>
-            <div class="objective-row">
-              <div>
-                <h3 id="objective-title">Select a station and ready up.</h3>
-                <p id="objective-copy"></p>
-              </div>
-              <p id="phase-timer" class="phase-timer">No active deadline</p>
-            </div>
-
-            <details id="brief-panel" class="role-brief">
-              <summary>
-                <span>YOUR ASSIGNED BRIEF(S)</span>
-                <small>Share the information aloud</small>
-              </summary>
-              <p id="role-clue">Choose a role to receive your mission information.</p>
-            </details>
-
-            <div id="actions" class="actions"></div>
-          </section>
-        </main>
-
-        <aside class="glass systems-panel">
-          <div class="panel-heading">
-            <h3>Spacecraft</h3>
-            <span id="systems-status">NOMINAL</span>
-          </div>
-          <div class="system-grid">
-            <div id="oxygen-gauge" class="radial-gauge" style="--value:100;--tone:var(--cyan)">
-              <div><strong id="oxygen-value">100%</strong><span>Oxygen</span></div>
-            </div>
-            <div id="power-gauge" class="radial-gauge" style="--value:100;--tone:var(--cyan)">
-              <div><strong id="power-value">100%</strong><span>Power</span></div>
-            </div>
-            <div id="heat-gauge" class="radial-gauge heat-gauge" style="--value:12;--tone:var(--amber)">
-              <div><strong id="heat-value">12%</strong><span>Heat</span></div>
-            </div>
-            <div id="trajectory-gauge" class="radial-gauge" style="--value:82;--tone:var(--green)">
-              <div><strong id="trajectory-value">82%</strong><span>Trajectory</span></div>
-            </div>
-          </div>
-
-          <div class="data-meter">
-            <div><span>Mission data</span><strong id="data-value">10%</strong></div>
-            <div class="bar data-bar"><i id="data-bar"></i></div>
-          </div>
-
-          <div id="telemetry-card" class="telemetry-card">
-            <span>LIVE TELEMETRY</span>
-            <dl>
-              <div><dt>Velocity</dt><dd id="speed-value">—</dd></div>
-              <div><dt>Altitude</dt><dd id="altitude-value">—</dd></div>
-              <div><dt>Descent</dt><dd id="descent-value">—</dd></div>
-            </dl>
-          </div>
-        </aside>
-
-        <footer class="glass footer-panel">
-          <span id="network-state">CONNECTED</span>
-          <button id="sound-button" class="text-button" aria-pressed="false">Sound: off</button>
-          <button id="copy-code-button" class="text-button">Copy invite link</button>
-          <button id="leave-button" class="text-button">Leave mission</button>
-        </footer>
-      </section>
-    </main>
-
-    <div id="toast" class="toast" role="status"></div>
-    <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <script src="/scene.js"></script>
-    <script src="/app.js"></script>
-  </body>
-</html>
+<div id="game" class="hidden">
+<header><div><b>LUNAR MISSION</b><span>ARTEMIS II</span></div><div class="headerStats"><strong id="score">0 / 3 VERIFIED</strong><span id="actions">6 ACTIONS</span><span id="roomDisplay"></span></div></header>
+<div class="layout">
+<aside>
+ <section><h3>MISSION CREW</h3><div id="crew"></div></section>
+ <section><h3>YOUR STATION</h3><select id="role"></select><button id="ready">READY</button><button id="start" class="primary">LAUNCH</button></section>
+ <section id="roleInfo"></section>
+</aside>
+<main>
+ <section class="trajectoryPanel">
+   <div class="missionTitle"><div><small id="phaseNo">MISSION BOARD</small><h1 id="phaseTitle">ASSEMBLE THE CREW</h1><p id="phaseContext">Assign stations and prepare Orion for flight.</p></div><div class="milestone" id="milestone">KENNEDY SPACE CENTER</div></div>
+   <svg id="trajectory" viewBox="0 0 1000 390" role="img" aria-label="Artemis II free-return trajectory">
+    <defs><radialGradient id="earthG"><stop offset="0" stop-color="#b9efff"/><stop offset=".45" stop-color="#3c9bd4"/><stop offset="1" stop-color="#123d67"/></radialGradient><radialGradient id="moonG"><stop offset="0" stop-color="#f0eadc"/><stop offset="1" stop-color="#77756f"/></radialGradient></defs>
+    <rect width="1000" height="390" fill="#030a12"/><g id="stars"></g>
+    <circle cx="125" cy="210" r="78" fill="url(#earthG)"/><text x="92" y="315">EARTH</text>
+    <circle cx="835" cy="170" r="48" fill="url(#moonG)"/><text x="805" y="245">MOON</text>
+    <path class="path ghost" d="M125 210 C260 10,610 35,790 140 C900 210,855 315,680 320 C425 330,270 300,125 210"/>
+    <path id="progressPath" class="path progress" d="M125 210 C260 10,610 35,790 140 C900 210,855 315,680 320 C425 330,270 300,125 210"/>
+    <g id="nodes"></g><g id="shipMarker"><circle r="10"/><path d="M-4 9 L0 -16 L4 9 Z"/></g>
+   </svg>
+   <div class="legend"><span>● NOMINAL FREE-RETURN PATH</span><span>◆ CURRENT ORION POSITION</span><span>Failures widen future risk; successful navigation protects the return corridor.</span></div>
+ </section>
+ <section class="board">
+  <div class="boardHead"><div><small>PHASE CHALLENGES</small><h2 id="status">Waiting for crew.</h2></div><div id="pips"></div></div>
+  <div id="cards" class="cards"></div>
+  <div id="active" class="active hidden"><h2 id="challengeTitle"></h2><p id="challengePrompt"></p><div id="clues" class="clues"></div><div id="options" class="options"></div><button id="scan">SPEND 1 ACTION: MISSION ANALYSIS</button></div>
+ </section>
+</main>
+<aside>
+ <section><h3>SPACECRAFT MARGINS</h3><div id="gauges"></div></section>
+ <section><h3>MISSION LOG</h3><div id="log"></div></section>
+</aside>
+</div></div><div id="toast"></div><script src="/app.js"></script></body></html>

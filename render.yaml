@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: lunarmission
+    name: lunar-mission
     runtime: node
     plan: free
     buildCommand: npm install --package-lock=false
